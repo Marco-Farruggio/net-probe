@@ -6,7 +6,7 @@ use iced::{Element, Subscription, stream};
 
 use scan::Device;
 
-const WINDOW_TITLE: &str = "Net Probe";
+const WINDOW_TITLE: &str = concat!("Net Probe v", env!("CARGO_PKG_VERSION"));
 
 #[derive(Default)]
 struct NetProbe {
