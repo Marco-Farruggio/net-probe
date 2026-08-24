@@ -26,4 +26,4 @@ TODO:
 - change between network interfaces
 - start using os syscalls
 - unify local ip and subnet mask to a single source of truth
-- move some blocking calls into async .await/spawn blocking
+- move some blocking calls into async .await/spawn blockinghow 
