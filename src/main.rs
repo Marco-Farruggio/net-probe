@@ -1,7 +1,11 @@
+#![windows_subsystem = "windows"]
+
+mod subnet;
 mod scan;
+mod net;
 
 use iced::futures::Stream;
-use iced::widget::{button, column, row, rule, scrollable, table, text};
+use iced::widget::{button, column, row, rule, Scrollable, table, text};
 use iced::{Element, Subscription, stream};
 
 use scan::Device;
@@ -58,10 +62,12 @@ impl NetProbe {
 
         let toolbar = row![
             refresh_button,
-            text(format!("{} hosts found", self.devices.len()))
+            text(format!("Scanned: {}/254 • {} hosts found", self.devices.len(), self.devices.iter().filter(|d| !d.is_empty()).count())),
+            text(net::LOCAL_IP.map(|ip| ip.to_string()).unwrap_or("default-ip-not-found".into())).align_x(iced::Alignment::End).width(iced::Length::Fill),
+            text(subnet::SUBNET_MASK.map(|sn| sn.to_string()).unwrap_or("subnet-mask-not-found".into())),
         ]
         .align_y(iced::Alignment::Center)
-        .spacing(12)
+        .spacing(10)
         .padding(10);
 
         let device_table = table(
@@ -74,16 +80,17 @@ impl NetProbe {
                 table::column("HTTP",       |d: Device| d.http.to_richtext()),
                 table::column("HTTPS",      |d: Device| d.https.to_richtext()),
             ],
-            self.devices.iter().cloned(),
+            self.devices.iter().filter(|d| !d.is_empty()).into_iter().cloned(),
         )
         .width(iced::Length::Fill);
 
         column![
             toolbar,
             rule::horizontal(1),
-            scrollable(device_table)
+            Scrollable::new(device_table)
                 .width(iced::Length::Fill)
                 .height(iced::Length::Fill)
+                .spacing(0)
         ]
         .into()
     }

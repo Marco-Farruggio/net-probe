@@ -45,11 +45,11 @@ pub struct Device {
 
 impl Device {
     pub fn is_empty(&self) -> bool {
-        self.icmp == ScanState::Closed ||
-        self.hostname.is_none() ||
-        self.mac.is_none() ||
-        self.vendor.is_none() ||
-        self.http == ScanState::Closed ||
+        self.icmp == ScanState::Closed &&
+        self.hostname.is_none() &&
+        self.mac.is_none() &&
+        self.vendor.is_none() &&
+        self.http == ScanState::Closed &&
         self.https == ScanState::Closed
     }
 }
@@ -87,7 +87,7 @@ async fn scan_host(ip: Ipv4Addr) -> Device {
     let (icmp_up, (http_open, https_open), hostname) =
         tokio::join!(ping(&ip_string), check_ports(&ip_string), reverse_dns(ip),);
 
-    let mac = get_mac(&ip_string).await;
+    let mac = get_mac(&ip).await;
     let vendor = match &mac {
         Some(mac) => get_vendor(mac).await,
         None => None,
@@ -149,14 +149,15 @@ async fn reverse_dns(ip: Ipv4Addr) -> Option<String> {
     }
 }
 
-async fn get_mac(ip: &str) -> Option<String> {
+async fn get_mac(ip: &Ipv4Addr) -> Option<String> {
+    let ip_string = ip.to_string();
     let mut cmd = Command::new("arp");
 
     #[cfg(target_os = "windows")]
-    cmd.args(["-a", ip]);
+    cmd.args(["-a", &ip_string]);
 
     #[cfg(not(target_os = "windows"))]
-    cmd.args(["-n", ip]);
+    cmd.args(["-n", ip_string]);
 
     #[cfg(target_os = "windows")]
     {
@@ -170,9 +171,54 @@ async fn get_mac(ip: &str) -> Option<String> {
         .ok()?;
     let text = String::from_utf8_lossy(&output.stdout);
 
-    text.split_whitespace()
+    let mac = text.split_whitespace()
         .find(|token| looks_like_mac(token))
-        .map(|s| s.to_uppercase())
+        .map(|s| s.to_uppercase());
+
+    match mac {
+        Some(mac) => { return Some(mac); },
+        None => {
+            // manual arp request, only on windows (my personal platform)
+            let ip = ip.clone();
+            tokio::task::spawn_blocking(move || {
+                win_arp_req(ip)
+            })
+            .await
+            .ok()
+            .flatten()
+        }
+    }
+}
+#[cfg(windows)]
+fn win_arp_req(ip: Ipv4Addr) -> Option<String> {
+    use windows::Win32::NetworkManagement::IpHelper::SendARP;
+
+    let dest_ip = u32::from_ne_bytes(ip.octets());
+    let mut mac = [0u8; 6];
+    let mut len = 6u32;
+
+    let result = unsafe {
+        SendARP(
+            dest_ip,
+            0,
+            mac.as_mut_ptr().cast(),
+            &mut len,
+        )
+    };
+
+    if result == 0 && len == 6 {
+        Some(format!(
+            "{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]
+        ))
+    } else {
+        None
+    }
+}
+
+#[cfg(not(windows))]
+fn win_arp_req(_ip: Ipv4Addr) -> Option<MacAddr> {
+    None
 }
 
 fn looks_like_mac(token: &str) -> bool {
