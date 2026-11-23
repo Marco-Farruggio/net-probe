@@ -153,11 +153,7 @@ async fn get_mac(ip: &Ipv4Addr) -> Option<String> {
     let ip_string = ip.to_string();
     let mut cmd = Command::new("arp");
 
-    #[cfg(target_os = "windows")]
     cmd.args(["-a", &ip_string]);
-
-    #[cfg(not(target_os = "windows"))]
-    cmd.args(["-n", ip_string]);
 
     #[cfg(target_os = "windows")]
     {
@@ -217,7 +213,7 @@ fn win_arp_req(ip: Ipv4Addr) -> Option<String> {
 }
 
 #[cfg(not(windows))]
-fn win_arp_req(_ip: Ipv4Addr) -> Option<MacAddr> {
+fn win_arp_req(_ip: Ipv4Addr) -> Option<String> {
     None
 }
 
